@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bügelperlen-Vorlage aus Foto</title>
+<style>
+:root{--bg:#eef1f0;--ink:#1b2a3a;--mute:#5d6b78;--card:#fff;--line:#cfd7d6;--acc:#e8641c;--accink:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#16202a;--ink:#e8eef2;--mute:#9aa9b5;--card:#1e2b37;--line:#33444f;--acc:#f0883f;--accink:#16202a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+ background-image:radial-gradient(var(--line) 2px,transparent 2.5px);background-size:20px 20px}
+main{max-width:760px;margin:0 auto;padding:28px 16px 48px}
+h1{font-size:1.9rem;line-height:1.15;margin:0 0 6px;letter-spacing:-.02em}
+.sub{color:var(--mute);margin:0 0 22px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+.drop{display:block;border:2px dashed var(--line);border-radius:10px;padding:22px;text-align:center;cursor:pointer}
+.drop:hover,.drop:focus-within{border-color:var(--acc)}
+.drop input{position:absolute;opacity:0;width:1px;height:1px}
+.row{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:end}
+label{display:flex;flex-direction:column;gap:4px;font-size:.9rem;color:var(--mute)}
+label.chk{flex-direction:row;align-items:center;gap:8px;color:var(--ink)}
+input[type=number]{width:96px;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+button{font:inherit;font-weight:600;padding:12px 20px;border:0;border-radius:8px;background:var(--acc);color:var(--accink);cursor:pointer}
+button:disabled{opacity:.4;cursor:not-allowed}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.prev{overflow:auto;text-align:center}
+canvas{max-width:100%;height:auto;image-rendering:auto}
+#info{color:var(--mute);font-size:.9rem;margin:10px 0 0}
+#legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px 14px;margin-top:12px;font-size:.88rem}
+#legend div{display:flex;align-items:center;gap:8px}
+.sw{width:22px;height:22px;border-radius:50%;border:1px solid rgba(0,0,0,.35);display:grid;place-items:center;font-size:.7rem;font-weight:700;flex:none}
+.note{font-size:.82rem;color:var(--mute)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+ <h1>Foto in Bügelperlen-Vorlage</h1>
+ <p class="sub">Die Verarbeitung läuft komplett in deinem Browser. Dein Bild wird nicht hochgeladen.</p>
+
+ <div class="card">
+  <label class="drop"><input type="file" id="file" accept="image/*">
+   <strong>Bild auswählen</strong><br><span class="note">JPG, PNG, WebP</span></label>
+ </div>
+
+ <div class="card" id="ctl" hidden>
+  <div class="row">
+   <label>Breite in Perlen<input type="number" id="w" value="29" min="5" max="116"></label>
+   <label>Max. Farben<input type="number" id="n" value="12" min="2" max="32"></label>
+   <label class="chk"><input type="checkbox" id="dither"> Dithering (für Fotos)</label>
+  </div>
+ </div>
+
+ <div class="card" id="out" hidden>
+  <div class="prev"><canvas id="prev"></canvas></div>
+  <p id="info"></p>
+  <div id="legend"></div>
+  <p style="margin:16px 0 0"><button id="pdf">PDF herunterladen</button></p>
+  <p class="note">Rastermaß 5 mm (Midi-Steckplatte, 29×29). Beim Drucken „Tatsächliche Größe“ (100 %) wählen. Farbtöne sind Näherungen und können von deinen Perlen abweichen.</p>
+ </div>
+</main>
+
+<!-- Für DSGVO-Konformität die Datei besser selbst hosten: libs/jspdf.umd.min.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+// Generische Perlenpalette (eigene Namen, keine Herstellerbezeichnungen)
+const RAW=[["Weiß","#F4F4F2"],["Creme","#F1E6C3"],["Pastellgelb","#F8EC9A"],["Gelb","#F5D800"],["Orange","#F07C1A"],
+["Rot","#CC2A2F"],["Dunkelrot","#7E1F2A"],["Rosa","#F4B3C7"],["Pink","#E0368A"],["Lila","#7A4A9A"],
+["Pastelllila","#C9B3E3"],["Dunkelblau","#1F2E6B"],["Blau","#2C6DB5"],["Hellblau","#7FC1E6"],["Pastellblau","#AFCDF0"],
+["Türkis","#1FA5A0"],["Pastellgrün","#B6E3C0"],["Hellgrün","#8CCB4A"],["Grün","#2E9A47"],["Dunkelgrün","#17543A"],
+["Olive","#8A8A2E"],["Hautfarbe","#EBB892"],["Hellbraun","#B87C4C"],["Braun","#6B4226"],["Dunkelbraun","#3C2418"],
+["Hellgrau","#C9C9C9"],["Grau","#8A8D91"],["Dunkelgrau","#4A4D52"],["Schwarz","#1C1C1E"]];
+const SYM="ABCDEFGHJKLMNPQRSTUVWXYZ23456789", BOARD=29, PITCH=5; // Perlen je Platte, mm je Perle
+
+const lin=c=>{c/=255;return c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4)};
+function lab(c){const R=lin(c[0]),G=lin(c[1]),B=lin(c[2]);
+ const f=t=>t>.008856?Math.cbrt(t):7.787*t+16/116;
+ const x=f((.4124*R+.3576*G+.1805*B)/.95047),y=f(.2126*R+.7152*G+.0722*B),z=f((.0193*R+.1192*G+.9505*B)/1.08883);
+ return [116*y-16,500*(x-y),200*(y-z)]}
+const PAL=RAW.map(([name,h])=>{const rgb=[1,3,5].map(i=>parseInt(h.substr(i,2),16));return{name,rgb,lab:lab(rgb)}});
+const light=rgb=>(.299*rgb[0]+.587*rgb[1]+.114*rgb[2])>150;
+
+function nearest(c,allowed){const l=lab(c);let best=-1,bd=1e9;
+ for(const k of allowed){const p=PAL[k].lab,d=(l[0]-p[0])**2+(l[1]-p[1])**2+(l[2]-p[2])**2;if(d<bd){bd=d;best=k}}
+ return best}
+
+function quant(cells,W,H,allowed,dither){
+ const out=new Array(W*H).fill(-1),buf=cells.map(c=>c&&c.slice());
+ const spread=(x,y,e,f)=>{if(x<0||x>=W||y>=H)return;const t=buf[y*W+x];if(!t)return;
+  for(let j=0;j<3;j++)t[j]=Math.max(0,Math.min(255,t[j]+e[j]*f))};
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  const c=buf[y*W+x];if(!c)continue;
+  const k=nearest(c,allowed);out[y*W+x]=k;
+  if(dither){const e=c.map((v,j)=>v-PAL[k].rgb[j]);
+   spread(x+1,y,e,7/16);spread(x-1,y+1,e,3/16);spread(x,y+1,e,5/16);spread(x+1,y+1,e,1/16)}}
+ return out}
+
+let img=null,grid=null,gw=0,gh=0,counts=[];
+const $=id=>document.getElementById(id);
+
+function build(){
+ if(!img)return;
+ gw=Math.max(5,Math.min(116,+$("w").value||29));
+ gh=Math.max(1,Math.round(gw*img.height/img.width));
+ const maxN=Math.max(2,Math.min(32,+$("n").value||12));
+ // 1) Vorskalieren (max. 1024 px), 2) Boxfilter auf Rastergröße
+ const s=Math.min(1,1024/Math.max(img.width,img.height));
+ const sw=Math.max(gw,Math.round(img.width*s)),sh=Math.max(gh,Math.round(img.height*s));
+ const cv=document.createElement("canvas");cv.width=sw;cv.height=sh;
+ const cx=cv.getContext("2d",{willReadFrequently:true});
+ cx.imageSmoothingQuality="high";cx.drawImage(img,0,0,sw,sh);
+ const px=cx.getImageData(0,0,sw,sh).data,cells=[];
+ for(let gy=0;gy<gh;gy++)for(let gx=0;gx<gw;gx++){
+  const x0=Math.floor(gx*sw/gw),x1=Math.max(x0+1,Math.floor((gx+1)*sw/gw));
+  const y0=Math.floor(gy*sh/gh),y1=Math.max(y0+1,Math.floor((gy+1)*sh/gh));
+  let r=0,g=0,b=0,a=0,n=0;
+  for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){const i=(y*sw+x)*4,al=px[i+3];
+   r+=px[i]*al;g+=px[i+1]*al;b+=px[i+2]*al;a+=al;n++}
+  cells.push(a/n<128?null:[r/a,g/a,b/a])}
+ // Farben begrenzen: erst volle Palette, dann die häufigsten N behalten
+ const all=PAL.map((_,i)=>i),first=quant(cells,gw,gh,all,false),cnt=new Array(PAL.length).fill(0);
+ first.forEach(k=>{if(k>=0)cnt[k]++});
+ const keep=all.filter(k=>cnt[k]>0).sort((a,b)=>cnt[b]-cnt[a]).slice(0,maxN);
+ grid=quant(cells,gw,gh,keep.length?keep:all,$("dither").checked);
+ counts=new Array(PAL.length).fill(0);grid.forEach(k=>{if(k>=0)counts[k]++});
+ draw();
+}
+
+function draw(){
+ const cell=Math.max(6,Math.min(18,Math.floor(680/gw))),c=$("prev");
+ c.width=gw*cell;c.height=gh*cell;const x=c.getContext("2d");
+ x.fillStyle=getComputedStyle(document.body).getPropertyValue("--card");x.fillRect(0,0,c.width,c.height);
+ for(let y=0;y<gh;y++)for(let i=0;i<gw;i++){
+  const k=grid[y*gw+i];x.beginPath();x.arc((i+.5)*cell,(y+.5)*cell,cell*.42,0,7);
+  if(k<0){x.strokeStyle="#bbb";x.stroke()}else{x.fillStyle="rgb("+PAL[k].rgb+")";x.fill()}}
+ const used=PAL.map((_,i)=>i).filter(i=>counts[i]>0).sort((a,b)=>counts[b]-counts[a]);
+ const total=used.reduce((s,i)=>s+counts[i],0);
+ $("info").textContent=gw+" × "+gh+" Perlen · "+Math.ceil(gw/BOARD)*Math.ceil(gh/BOARD)+" Platte(n) · "+used.length+" Farben · "+total+" Perlen";
+ $("legend").innerHTML=used.map(i=>{const p=PAL[i];
+  return '<div><span class="sw" style="background:rgb('+p.rgb+');color:'+(light(p.rgb)?"#000":"#fff")+'">'+SYM[i]+'</span>'+p.name+' ('+counts[i]+')</div>'}).join("");
+ $("out").hidden=false;$("ctl").hidden=false;
+}
+
+function makePdf(){
+ const doc=new window.jspdf.jsPDF({unit:"mm",format:"a4"});
+ const bx=Math.ceil(gw/BOARD),by=Math.ceil(gh/BOARD),ox=(210-BOARD*PITCH)/2,oy=32;let first=true;
+ for(let ty=0;ty<by;ty++)for(let tx=0;tx<bx;tx++){
+  if(!first)doc.addPage();first=false;
+  const x0=tx*BOARD,y0=ty*BOARD,cw=Math.min(BOARD,gw-x0),ch=Math.min(BOARD,gh-y0);
+  doc.setFontSize(12);doc.setTextColor(0);
+  doc.text("Platte "+(ty*bx+tx+1)+" von "+bx*by+" (Spalte "+(tx+1)+", Zeile "+(ty+1)+")",ox,18);
+  doc.setFontSize(8);doc.setTextColor(110);
+  doc.text("Rastermaß 5 mm – mit 100 % Skalierung drucken",ox,23);
+  doc.setLineWidth(.1);doc.setDrawColor(215);
+  for(let i=0;i<=cw;i+=5)doc.line(ox+i*PITCH,oy,ox+i*PITCH,oy+ch*PITCH);
+  for(let j=0;j<=ch;j+=5)doc.line(ox,oy+j*PITCH,ox+cw*PITCH,oy+j*PITCH);
+  for(let y=0;y<ch;y++)for(let x=0;x<cw;x++){
+   const k=grid[(y0+y)*gw+x0+x],cx=ox+(x+.5)*PITCH,cy=oy+(y+.5)*PITCH;
+   if(k<0){doc.setDrawColor(200);doc.circle(cx,cy,2.1,"S");continue}
+   doc.setFillColor(...PAL[k].rgb.map(Math.round));doc.setDrawColor(110);doc.circle(cx,cy,2.1,"FD");
+   doc.setFontSize(7);doc.setTextColor(light(PAL[k].rgb)?0:255);
+   doc.text(SYM[k],cx,cy,{align:"center",baseline:"middle"})}}
+ // Legende
+ doc.addPage();doc.setFontSize(14);doc.setTextColor(0);doc.text("Farbliste",20,20);
+ const used=PAL.map((_,i)=>i).filter(i=>counts[i]>0).sort((a,b)=>counts[b]-counts[a]);
+ used.forEach((i,r)=>{const y=34+r*9,p=PAL[i];
+  doc.setFillColor(...p.rgb);doc.setDrawColor(110);doc.circle(25,y,3,"FD");
+  doc.setFontSize(8);doc.setTextColor(light(p.rgb)?0:255);doc.text(SYM[i],25,y,{align:"center",baseline:"middle"});
+  doc.setFontSize(11);doc.setTextColor(0);doc.text(p.name,35,y,{baseline:"middle"});
+  doc.text(counts[i]+" Perlen",110,y,{baseline:"middle"})});
+ doc.save("buegelperlen-vorlage.pdf");
+}
+
+$("file").addEventListener("change",e=>{
+ const f=e.target.files[0];if(!f)return;
+ const im=new Image(),url=URL.createObjectURL(f);
+ im.onload=()=>{img=im;URL.revokeObjectURL(url);build()};
+ im.onerror=()=>alert("Das Bild konnte nicht geladen werden.");
+ im.src=url});
+["w","n","dither"].forEach(id=>$(id).addEventListener("input",build));
+$("pdf").addEventListener("click",makePdf);
+</script>
+</body>
+</html>
